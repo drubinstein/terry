@@ -1,0 +1,79 @@
+{
+  "_README": "TERRY manager state file — the durable, single source of truth for the agent-fleet manager loop. JSON has no comments, so all guidance lives inside string values (this _README and the _model field). COPY THIS FILE to your project (e.g. tools/agent_queue.json), then: (1) replace example values, (2) keep ONE in_flight entry per running worker, (3) keep the queue priority-ordered (lowest prio number = highest priority), (4) keep done_this_session newest-first as a running ledger. The manager commits this file each heartbeat. Fields prefixed with _ are documentation/config; everything else is live state.",
+  "_model": "MANAGER HEARTBEAT — run this loop each wake-up. (1) OBSERVE: read completion notifications; poll each in_flight worker's live state via its unique handle (HTTP status endpoint or bounded log tail — prefer structured polling over log-grep). Recognize and NO-OP stale completion echoes (a finished agent re-emits transcript tails that look like new events). (2) INTEGRATE: for each genuinely-completed worker, merge its branch into the integration branch; resolve conflicts deterministically (two distinct additions at one spot → keep BOTH; two competing fixes → keep the validated/more-complete one, drop the duplicate); run the test/verify suite IN THE MAIN checkout (NEVER the worktree — worktrees show spurious failures from incomplete fixtures); commit only if green. (3) DEQUEUE + DISPATCH: pop the next-priority (lowest prio) UNBLOCKED queue item; create a fresh worktree+branch off the CURRENT integration_head (git worktree add -f -b <branch> <wt> <integration-HEAD>); symlink heavy untracked deps (ln -sfn) and copy needed checkpoints as uniquely-named UNTRACKED files; assign a UNIQUE handle/port; dispatch exactly ONE worker with a prompt that states the single scoped blocker, the isolation contract (commit CODE ONLY to its branch; never touch integration branch/other worktrees), 'DRIVE ACTIVELY — do not arm a watcher and yield (that orphans the run and it dies)', a determinism bar (fixed/bounded budgets + two byte-identical output hashes), scoped process-kill hygiene (kill only its own handle/port), and a structured report-back contract (what worked + evidence, commit hashes, how far, next blocker). (4) RECORD: move completed workers to done_this_session (newest first), add the new in_flight entry, bump integration_head, update queue; commit this file. (5) RE-ARM: schedule the next heartbeat with a LONG fallback delay — completions wake you sooner, so the timer is only a safety net. RESOURCE WALL: cap concurrent HEAVY workers to machine capacity (watch free memory + load); a slot BLOCKED on another's fix should be PAUSED, not run into the same wall; give a LONG end-to-end completion run a quiet window. NEVER 'git clean' a worktree (it deletes symlinks + untracked checkpoints). Verify exactly one process per handle (kill orphans). Cross-check any 'impossible/unreachable' tooling verdict against ground truth before believing it. VERIFY BEFORE CLAIM: read the actual end state (memory/flag/output) before recording success.",
+  "_field_docs": {
+    "integration_head": "Short git SHA of the integration branch (the merge point NOTHING edits directly — only the manager merges into it). Bump after each successful merge+verify.",
+    "in_flight[].id": "Stable slug for this run/blocker; matches the queue id it was dispatched from.",
+    "in_flight[].agent": "Identifier of the dispatched worker agent (background task id / agent handle).",
+    "in_flight[].wt": "Absolute or repo-relative worktree path for this worker (one worktree per worker).",
+    "in_flight[].branch": "The worker's own branch (off current integration_head); worker commits CODE ONLY here.",
+    "in_flight[].port": "Unique resource handle (e.g. --http-port NNNN, or a dir) so siblings never collide.",
+    "in_flight[].run": "Logical run name (which pipeline/run-type this worker is advancing).",
+    "in_flight[].started": "ISO timestamp the worker was dispatched (for staleness / resource-window decisions).",
+    "in_flight[].status": "running | paused | awaiting-merge. Pause a slot genuinely BLOCKED on another's fix.",
+    "in_flight[].title": "One line: what this worker is doing + its resume point + the immediate next step.",
+    "queue[].prio": "Lower number = higher priority. Manager always dispatches the lowest-prio UNBLOCKED item next.",
+    "queue[].id": "Stable slug; becomes in_flight[].id on dispatch.",
+    "queue[].blocked_by": "Optional list of ids that must complete+merge first; keep PAUSED, do not dispatch yet.",
+    "queue[].title": "The blocker / decision / hypothesis to be worked, stated as one scoped task.",
+    "done_this_session[]": "Dated one-line ledger entries, NEWEST FIRST: merged commit shas, verify result, key decisions/conflict resolutions."
+  },
+  "integration_head": "a1b2c3d",
+  "in_flight": [
+    {
+      "id": "migrate-billing-service",
+      "agent": "worker-7f3a",
+      "wt": "../wt-billing",
+      "branch": "terry/migrate-billing-service",
+      "port": "8901",
+      "run": "service-migration",
+      "started": "2026-06-02T14:05:00Z",
+      "status": "running",
+      "title": "Migrate billing-service to new config loader; resume at adapters/, next: port the retry middleware then run the integration suite on port 8901."
+    },
+    {
+      "id": "hypo-cache-lru-vs-lfu",
+      "agent": "worker-2c9d",
+      "wt": "../wt-cache-lru",
+      "branch": "terry/hypo-cache-lru",
+      "port": "8902",
+      "run": "cache-eviction-experiment",
+      "started": "2026-06-02T14:40:00Z",
+      "status": "running",
+      "title": "Hypothesis A (LRU eviction) vs sibling LFU worker; resume after wiring the policy interface, next: run the fixed 1M-op benchmark twice and compare hit-rate hashes."
+    }
+  ],
+  "queue": [
+    {
+      "prio": 1,
+      "id": "fix-flaky-auth-test",
+      "title": "Auth integration test diverges across runs; instrument the live path, find the wall-clock/shared-state branch, make it deterministic (two byte-identical runs)."
+    },
+    {
+      "prio": 2,
+      "id": "hypo-cache-lfu",
+      "blocked_by": [],
+      "title": "Hypothesis B (LFU eviction) — parallel sibling of hypo-cache-lru; merge whichever wins the benchmark, drop the loser."
+    },
+    {
+      "prio": 3,
+      "id": "migrate-notifications-service",
+      "blocked_by": [
+        "migrate-billing-service"
+      ],
+      "title": "Migrate notifications-service to new config loader; PAUSED until migrate-billing-service merges (shares the config-loader API surface)."
+    },
+    {
+      "prio": 5,
+      "id": "doc-migration-runbook",
+      "title": "Write the service-migration runbook from the merged billing + notifications diffs; low priority, no blockers."
+    }
+  ],
+  "done_this_session": [
+    "2026-06-02T13:50Z — MERGED terry/migrate-search-service @ 9d4e1f2 into integration (a1b2c3d); main-checkout verify suite green (412 pass). Resolved conflict in config/loader.py by keeping BOTH the search timeout knob and the shared retry default (distinct additions).",
+    "2026-06-02T13:10Z — Dispatched worker-7f3a for migrate-billing-service in ../wt-billing on port 8901 (off integration_head 7e0c5aa).",
+    "2026-06-02T12:30Z — NO-OP'd a stale completion echo from worker-search (already merged at the 13:50 entry above was its real finish); recognized re-emitted transcript tail, did not re-merge.",
+    "2026-06-02T11:55Z — Killed orphan process on port 8902 left by a relaunched worker; verified exactly one process per handle before assigning 8902 to hypo-cache-lru.",
+    "2026-06-02T11:00Z — Paused slot migrate-notifications-service (blocked_by migrate-billing-service); not run into the resource wall while billing's config API is in flight."
+  ]
+}

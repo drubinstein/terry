@@ -1,0 +1,68 @@
+{
+  "_README": "ANDREJ state file — the durable lab notebook for one observe->analyze->act iteration loop. JSON has no comments, so all guidance lives inside string values (this _README, _loop, _field_docs). COPY THIS FILE to your project (e.g. research_state.json), then: (1) fill goal + metric + budget BEFORE the first iteration (you cannot loop without all three), (2) keep `hypotheses` to 1-2 OPEN at a time (few, falsifiable — not a shotgun), (3) APPEND every experiment to `trials` newest-first and NEVER rewrite history (it is the forensic record), (4) commit this file after each trial so the loop is reconstructable. Fields prefixed with _ are documentation; everything else is live state.",
+  "_loop": "EACH ITERATION: (1) OBSERVE — gather ground-truth signal from the LIVE system via a structured channel (a /state endpoint or a machine-readable metric stream), NOT a buffered log grep. If the cause is unclear, your FIRST act is to INSTRUMENT the exact live code path and READ the trace before hypothesizing. Reproduce the failure before fixing it; prefer a RUNTIME PROBE over a static model for facts about the running system. (2) ANALYZE (orient) — interpret the signal through a mental model: find the HOTSPOT/SINK (most-visited node), OSCILLATION (highest A<->B bounce), and FINAL STATE; write 1-2 FALSIFIABLE hypotheses into `hypotheses`. Don't act on a stale/polluted picture. (3) ACT — change EXACTLY ONE variable targeting the top hypothesis; run to the FIXED `budget`; diff the scalar `metric` vs baseline; metric improved past a real threshold -> KEEP (git commit), else REVERT (git revert/checkout). Prove determinism with TWO byte-identical runs. VERIFY BEFORE CLAIM: read the actual end-state artifact (flag/exit-code/metric/hashes) before recording success. APPEND the trial here. After the 2nd failed attempt on the SAME wall (don't start a 3rd serial tweak)? STOP serial iteration and ESCALATE: re-confirm the wall is real (re-observe; not a stale/incomplete signal), then read the source/spec, web-search, or fan out one experiment per distinct hypothesis from a common checkpoint and merge the winner. ANTI-PATTERNS: guess-and-rerun (instrument first), one-variable-only (no bundled changes), fixed-budget-not-wall-clock (comparable trials), never call divergence 'flaky' (it has a cause), never claim a result without the evidence line.",
+  "_field_docs": {
+    "goal": "The observable end state that closes the work, stated concretely (e.g. '0 flaky failures / 20 runs', 'p99 < 200ms', 'val loss < 0.5', 'pipeline_done flag == True').",
+    "metric.name": "The ONE scalar that mechanically decides keep-vs-revert. Cheap to read, monotone toward the goal. A vibe is not a metric.",
+    "metric.direction": "'min' or 'max' — which way is better.",
+    "metric.baseline": "The metric value of the reproduced failure / current system, measured at the FIXED budget. Each trial is compared against this.",
+    "metric.threshold": "The minimum improvement over baseline that counts as a real win (a falsification gate, not noise). KEEP only if the trial beats this.",
+    "budget": "The FIXED unit of work per trial (ticks/steps/iterations/requests/K-reruns-at-fixed-seed). NOT wall-clock — wall-clock makes trials incomparable and injects nondeterminism.",
+    "signal": "How you OBSERVE: the structured channel(s) used (a /state endpoint URL, a --metrics stream, a trace, a runtime probe). NOT 'grep the log'.",
+    "determinism_proof": "How you confirm a KEEP is real: two byte-identical output hashes at the FIXED budget. Differing hashes = a real cause to hunt, never 'flaky'.",
+    "hypotheses[].id": "Stable slug for this candidate cause.",
+    "hypotheses[].text": "A FALSIFIABLE statement of a cause + the observable it predicts (so an experiment can confirm or kill it).",
+    "hypotheses[].status": "open | confirmed | killed. Keep only 1-2 'open' at a time; move to confirmed/killed as trials decide them.",
+    "trials[]": "APPEND-ONLY, newest first. One object per experiment: {n, change (the ONE variable), metric_before, metric_after, kept (true/false), hypothesis (id it tested), evidence (the end-state artifact line + determinism hashes), commit (sha or 'reverted')}. NEVER rewrite a past trial.",
+    "escalation": "Set after the 2nd failed attempt on the same wall: which ladder rung you climbed (read-source | web-search | reference-impl | fan-out) and the outcome. Empty until you stall."
+  },
+  "goal": "Make the integration test suite deterministic: 0 flaky failures across 20 fixed-seed runs.",
+  "metric": {
+    "name": "failures_per_20_runs",
+    "direction": "min",
+    "baseline": 6,
+    "threshold": 6
+  },
+  "budget": "20 sequential runs at a FIXED seed (deterministic, comparable across trials)",
+  "signal": "JUnit XML report per run + a per-test resource-touch log; NOT scrollback grep.",
+  "determinism_proof": "two 20-run sweeps must produce byte-identical aggregate report hashes",
+  "hypotheses": [
+    {
+      "id": "h-shared-tmpdir",
+      "text": "Two tests write the same tmp path; order-dependent collision -> if each test gets an isolated tmp dir, failures drop to 0.",
+      "status": "confirmed"
+    },
+    {
+      "id": "h-wall-clock-branch",
+      "text": "A test asserts on a timestamp boundary; would fail near a second-rollover -> if so, failures would correlate with run start time, not order.",
+      "status": "killed"
+    }
+  ],
+  "escalation": "",
+  "trials": [
+    {
+      "n": 2,
+      "change": "give each test an isolated tmp dir via a per-test fixture (ONE variable)",
+      "metric_before": 6,
+      "metric_after": 0,
+      "kept": true,
+      "hypothesis": "h-shared-tmpdir",
+      "evidence": "0/20 failures; two 20-run sweeps hashed a1b2c3 == a1b2c3 (deterministic); pasted report, not 'should be fixed'",
+      "commit": "9d4e1f2"
+    },
+    {
+      "n": 1,
+      "change": "INSTRUMENT ONLY — per-test timing + resource-touch log, no behavior change",
+      "metric_before": 6,
+      "metric_after": 6,
+      "kept": false,
+      "hypothesis": "(observe step) reproduce + locate hotspot",
+      "evidence": "repro confirmed 6/20; analyzer: 5/6 failures in one test file; pass<->fail correlated with execution ORDER -> shared mutable resource",
+      "commit": "reverted (instrumentation only)"
+    }
+  ],
+  "done": [
+    "2026-06-02 — h-wall-clock-branch KILLED: failures correlated with order, not start time.",
+    "2026-06-02 — h-shared-tmpdir CONFIRMED + KEPT @ 9d4e1f2: isolated tmp dir -> 0/20, deterministic. Goal met."
+  ]
+}
