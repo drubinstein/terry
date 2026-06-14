@@ -10,29 +10,29 @@ matches it.
 ## Why this exists
 
 Claude writes code well but, under pressure, tends to *guess* — skip reproducing a
-bug, theorize before measuring, shrug a failure off as "flaky," or call something
+bug, theorize before measuring, dismiss a failure as "flaky," or call something
 done without evidence. Each skill here encodes a disciplined methodology that
-resists exactly that, distilled from real long-running agent work and generalized.
-You invoke a skill by intent ("does this bug actually reproduce?", "find the
-bottleneck"); Claude loads the matching playbook and follows it.
+resists exactly that, distilled from real long-running agent work. You invoke one
+by intent — "does this bug actually reproduce?", "find the bottleneck" — and
+Claude follows the matching playbook.
 
 ## The skills
 
-| Skill | Reach for it when… |
-|-------|--------------------|
-| **[jamie](skills/jamie/SKILL.md)** | you have a bug report and need to confirm it actually reproduces before fixing it |
-| **[sherlock](skills/sherlock/SKILL.md)** | a bug resists the obvious explanation — find the cause by elimination |
-| **[brendan](skills/brendan/SKILL.md)** | something is slow — find the bottleneck (Brendan Gregg's USE method) |
-| **[andrej](skills/andrej/SKILL.md)** | you're iterating toward a fix or metric and don't want to guess |
-| **[terry](skills/terry/SKILL.md)** | you have many long-running agent tasks — run them as a paced producer-consumer queue (parallelize + merge, with concurrency capped to avoid OOM and pace token spend) |
-| **[ronald](skills/ronald/SKILL.md)** | you're choosing between models or prompts — run a controlled A/B experiment, not a vibe check |
+| Skill | What it does |
+|-------|--------------|
+| **[jamie](skills/jamie/SKILL.md)** | Confirms a bug report actually reproduces before you fix it. |
+| **[sherlock](skills/sherlock/SKILL.md)** | Finds the cause of a stubborn bug by elimination. |
+| **[brendan](skills/brendan/SKILL.md)** | Finds the bottleneck when something is slow (Brendan Gregg's USE method). |
+| **[andrej](skills/andrej/SKILL.md)** | Drives an iterative fix or tuning loop, gated on a metric. |
+| **[terry](skills/terry/SKILL.md)** | Runs many long-running agent tasks as a paced queue — parallelized and merged, with concurrency capped to avoid OOM and pace token spend. |
+| **[ronald](skills/ronald/SKILL.md)** | Runs a controlled A/B experiment to choose a model or prompt. |
 
-Most stand alone, but five compose into a debugging-to-fix pipeline: **jamie** (confirm
-it's real) → **sherlock** (find the cause) → **brendan** (find the bottleneck) →
-**andrej** (drive the fix, gated on a metric) → **terry** (run many at once, paced to
-your machine and budget). **ronald**
-is the odd one out — a controlled experiment harness for picking a model or prompt with
-evidence. See each skill's `SKILL.md` for the full method.
+Most stand alone, but five compose into a debugging-to-fix pipeline: **jamie**
+(confirm it's real) → **sherlock** (find the cause) → **brendan** (find the
+bottleneck) → **andrej** (drive the fix, gated on a metric) → **terry** (run many
+at once, paced to your machine and budget). **ronald** stands apart — a controlled
+experiment for picking a model or prompt with evidence. See each skill's
+`SKILL.md` for the full method.
 
 ## Example
 
@@ -70,8 +70,8 @@ skills/<name>/
 ```
 
 The repo is named `terry` for historical reasons — it began as that single
-agent-fleet skill — but it's now a general software-engineering skills collection,
-and `terry` is just one of them.
+agent-fleet skill — but it's now a general collection, and `terry` is just one
+skill in it.
 
 ## Contributing
 
