@@ -24,12 +24,13 @@ bottleneck"); Claude loads the matching playbook and follows it.
 | **[sherlock](skills/sherlock/SKILL.md)** | a bug resists the obvious explanation — find the cause by elimination |
 | **[brendan](skills/brendan/SKILL.md)** | something is slow — find the bottleneck (Brendan Gregg's USE method) |
 | **[andrej](skills/andrej/SKILL.md)** | you're iterating toward a fix or metric and don't want to guess |
-| **[terry](skills/terry/SKILL.md)** | you have many independent long-running tasks to run in parallel and merge |
+| **[terry](skills/terry/SKILL.md)** | you have many long-running agent tasks — run them as a paced producer-consumer queue (parallelize + merge, with concurrency capped to avoid OOM and pace token spend) |
 | **[ronald](skills/ronald/SKILL.md)** | you're choosing between models or prompts — run a controlled A/B experiment, not a vibe check |
 
 Most stand alone, but five compose into a debugging-to-fix pipeline: **jamie** (confirm
 it's real) → **sherlock** (find the cause) → **brendan** (find the bottleneck) →
-**andrej** (drive the fix, gated on a metric) → **terry** (run many at once). **ronald**
+**andrej** (drive the fix, gated on a metric) → **terry** (run many at once, paced to
+your machine and budget). **ronald**
 is the odd one out — a controlled experiment harness for picking a model or prompt with
 evidence. See each skill's `SKILL.md` for the full method.
 

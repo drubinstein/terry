@@ -1,6 +1,6 @@
 ---
 name: terry
-description: Invoke when orchestrating a FLEET of parallel long-running agent tasks via a priority-queue manager over git worktrees — agent queue + task list + dispatched agents + a self-pacing heartbeat loop; covers dispatch, worktree isolation, the manager-only merge protocol, and the resource/orphan/determinism anti-patterns that make fleets fail.
+description: Invoke when orchestrating a FLEET of parallel long-running agent tasks via a priority-queue manager over git worktrees, OR when you want a producer-consumer task queue for agents that caps concurrency to avoid OOM and pace token spend on a budget — agent queue + task list + dispatched agents + a self-pacing heartbeat loop. Covers capacity-gated dispatch (backpressure), worktree isolation, the manager-only merge protocol, and the resource/orphan/determinism anti-patterns that make fleets fail.
 ---
 
 # Terry — agent-fleet orchestration
@@ -18,6 +18,19 @@ It is the generalization of four primitives wired into one durable loop:
 - **dispatched agents** — the native Agent tool (`run_in_background`)
 - **heartbeat** — `ScheduleWakeup` (or a `/loop`) that self-paces the manager
 
+Terry is **two tools in one**:
+
+- a **parallel fleet** — N workers run concurrently, each merged as it finishes
+  (distributed-VCS style); and
+- a **producer-consumer queue with backpressure** — the manager dispatches ONLY
+  into free capacity, so concurrency stays capped. That cap is your throttle:
+  keep peak memory under what the machine holds (**no OOM**), and **pace token
+  spend when you're on a budget** — lower the cap (down to 1) for a strictly
+  serial queue that drains the backlog one task at a time. Because the manager
+  wakes on completions and otherwise sleeps a long fallback, the loop itself
+  idles cheaply between ticks; the spend is the workers, and the cap controls the
+  burn rate.
+
 ## When to use
 
 Use Terry when you have **N independent long-running tasks** that each take
@@ -27,6 +40,8 @@ they finish. Typical shapes:
 - parallel exploration of competing hypotheses (one worker per hypothesis)
 - a fleet of per-target migrations (one worker per target)
 - multiple validation / iteration runs against a shared codebase
+- a **backlog you want drained at a controlled rate** — cap concurrency (even to
+  1) to stay under memory and to pace token spend on a budget
 - anything where **dispatch → it runs a while → it reports → merge → dispatch
   the next blocker** repeats.
 
@@ -34,9 +49,11 @@ they finish. Typical shapes:
 
 - A single quick task — just do it.
 - Work that must be strictly sequential because each step needs the previous
-  step's result — no parallelism to exploit, so no fleet.
-- More heavy concurrent runs than the machine can hold (see the resource-wall
-  lesson in `references/lessons-and-antipatterns.md`).
+  step's result — no parallelism to exploit. (Terry's queue still works as a
+  paced one-at-a-time consumer, but you don't need the fleet machinery.)
+- A single job so large that even ONE worker won't fit the machine — Terry paces
+  *concurrency*, but can't shrink a worker below its own footprint (see the
+  resource-wall lesson in `references/lessons-and-antipatterns.md`).
 
 ## The heartbeat loop (5 steps)
 

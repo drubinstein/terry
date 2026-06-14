@@ -172,10 +172,10 @@ Pick the next-priority blocker and dispatch **exactly one** worker for it.
 
 ### 3a. Decide whether to dispatch at all (the resource wall)
 
-Before dispatching, decide if there is capacity. **Too many concurrent HEAVY
-workers OOM/CPU-starve each other**, and long end-to-end runs then die
-NON-DETERMINISTICALLY (no traceback, each run failing progressively earlier).
-Concurrency policy:
+Before dispatching, decide if there is capacity — machine capacity, and (on a
+token budget) spend capacity. **Too many concurrent HEAVY workers OOM/CPU-starve
+each other**, and long end-to-end runs then die NON-DETERMINISTICALLY (no
+traceback, each run failing progressively earlier). Concurrency policy:
 
 - **Short, bounded fix/iteration runs parallelize fine** — dispatch freely up to
   the machine cap.
@@ -193,9 +193,15 @@ uptime  | sed 's/.*load average/load average/'
 - A slot that is **blocked** (waiting on another worker's fix to land) should be
   **PAUSED, not dispatched** into the wall. Pausing a genuinely-blocked slot is
   not starving it — running it into an OOM is worse.
+- **Concurrency is also your token-spend dial.** Every in-flight worker burns
+  tokens, so the same cap that protects memory also paces spend: on a budget,
+  lower it (down to 1) and let the queue drain serially. The manager wakes on
+  completions and otherwise sleeps the long fallback (Step 5), so the loop itself
+  costs almost nothing between ticks — the spend is the workers, and the cap sets
+  the burn rate.
 
-If there is no capacity, skip dispatch this tick; the next completion (which
-frees a slot) will wake the manager to try again.
+If there is no capacity (machine OR budget), skip dispatch this tick; the next
+completion (which frees a slot) will wake the manager to try again.
 
 ### 3b. Pick the next blocker
 
